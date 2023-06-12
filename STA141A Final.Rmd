@@ -1,0 +1,793 @@
+---
+title: "STA141A: Neural Activity Analysis and Predictive Modeling in Response to Visual Stimuli in Mice"
+author: "Amir Yaacoobi"
+date: "2023-04-23"
+output: html_document
+---
+
+```{r, echo = FALSE}
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+```
+
+
+```{r, echo = FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+# Abstract
+In the study conducted by Steinmetz et al. (2019), the aim was to investigate the neural activity and decision-making processes of mice in response to visual stimuli. The study utilized data collected from 10 mice across 39 sessions, with each session consisting of several hundred trials.
+
+During each trial, the mice were presented with visual stimuli on two screens placed on either side of them. The stimuli varied in terms of contrast levels, with values ranging from 0 to 1. The mice were trained to make decisions based on these visual stimuli by manipulating a wheel using their forepaws. The decision made by the mice determined whether they would receive a reward or penalty as feedback. Feedback type -1 corresponds to a negative feedback or a penalty given to the mice based on their decisions or responses to the visual stimuli. It indicates that the mice made an incorrect decision or their response did not meet the desired criteria, resulting in a penalty or unfavorable outcome.
+Feedback type 1 corresponds to a positive feedback or a reward given to the mice based on their response to the visual stimuli placed in front of them. It indicates that the mice made a correct decision or their response met the criteria, in which they were rewarded for. 
+
+The dataset analyzed in this study included various features related to the visual stimuli, neural activity, and decision outcomes of the mice. These features encompassed information such as contrast levels, average spike rates, pulse rates, and densities. By examining these features, the study aimed to gain insights into the relationship between neural activity and decision-making processes.
+
+
+## Section 1: Introduction
+
+This project focuses on analyzing a subset of data collected from an experiment conducted by Steinmetz et al. (2019) involving 10 mice and visual stimuli trials. The data provides insights into the neural activity of the mice, specifically their spike rates. Our goal is to understand patterns in neural activity and build a predictive model for trial outcomes based on the spike rates and stimulus characteristics.
+
+The brain activity was recorded as spike trains, which represent the firing of neurons. We are looking at data from 18 sessions involving four mice: Cori, Frossman, Hence, and Lederberg. By analyzing the spike rates, we aim to understand how the brain responds to different stimuli and identify trends between stimulus and neural activity patterns.
+
+The project consists of three main parts: Exploratory Data Analysis to understand the data, Data Integration to combine information from different trials and sessions, and Model Training and Prediction to develop a predictive model. We will also evaluate the model's performance using a separate test dataset.
+
+Through this project, we seek to enhance our understanding of neural activity and its relationship with stimuli. By uncovering patterns in the data and building a predictive model, we contribute to the field of neuroscience and learn more about brain processes in response to external stimuli.
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Section 2: Exploratory Analysis
+
+Our goal is to understand neural activity by analyzing patterns in our data. This data includes numerous sessions, each with multiple trials where mice respond to visual stimuli. The recorded neural activity during these trials forms the basis of our study.
+We plan to dive into the specifics of these datasets, studying the number of neurons involved, the number of trials conducted, the types of stimuli, and the resulting feedback.
+To aid understanding, we'll visually represent this data. We'll use density graphs, histograms, and different bar graphs to display neural activity across trials and sessions.
+
+One of our cenral  focuses in this experiment will be average spike rates. We aim to look at how this rate changes across sessions and trials, and what this could mean for our understanding of neural activity. For example, we're interested in seeing if there's a correlation between average spikes and the trial number.
+Another important measure is the pulse rate per time bin. This metric will help us understand the temporal dynamics of neural activity and how it evolves over time in response to different conditions.
+
+
+# The Sessions
+```{r, echo = FALSE}
+setwd("/Users/amiryaacoobi/Desktop/sessions")
+
+session = list()
+for(i in 1:18){
+  session[[i]] = readRDS(paste("session", i, ".rds", sep=""))
+  print(session[[i]]$mouse_name)
+  print(session[[i]]$date_exp)
+}
+
+```
+
+
+## Data Background 
+
+The dataset we are going to use for this experiment is called the Steinmetz et al.'s paper titled "Distributed coding of choice, action and engagement across the mouse brain". This dataset was created from an experiment that contained different experiments conducted on a set of mice to see what neural activity arise in different situations. 
+
+The data collected includes lots of information, like the exact timings of neuron firing in different parts of the brain, what choices the mice made, what visual cues they saw, and whether they got a reward. This data can help researchers understand how the brain processes information, makes decisions, and learns from the outcomes of those decisions.
+
+The mice had to turn the wheel in response to changes in contrast they saw on their left or right. If they did it right, they got a reward. So, the researchers could link together the decisions made by the mice, the visual cues given, and whether or not the mice received a reward.
+Furthermore, the dataset includes neural activity during periods of engagement and disengagement in the task, providing an opportunity to study how neural activity changes based on the mouse's level of engagement in the task.
+
+
+
+# Part 1:  Discovering the Data/ Exploratory Analysis
+
+
+
+
+
+```{r, echo = FALSE}
+
+for (i in 1:18) {
+  
+  session_data <- session[[i]]$spks
+  
+  # Calculate pulse rates
+  pulse_rates <- lapply(session_data, function(trial) colSums(trial)/ncol(trial))
+  
+  pulse_rates <- unlist(pulse_rates)
+  
+  # Create histogram
+  p <- ggplot(data.frame(PulseRate = pulse_rates), aes(x = PulseRate)) +
+    geom_histogram(binwidth = 0.1, fill = "steelblue", color = "black") +
+    labs(x = "Pulse Rate (spikes per time bin)", y = "Frequency", 
+         title = paste("Session", i))
+  
+  # Print the plot
+  print(p)
+}
+
+```
+### Analysis:
+We want to start the exploration by diving into the effect that pulse rate has on the feedback type, which comes out to either success or failure, (-1 or 1). I want to start by seeing how frequent the pulse rates per time bin are in each session, to see if there is any sort of correlation between our feedback type, which refers to whether or not there was a After plotting these histograms, we get to see that there are differentiating frequencies of Pulse Rate (spikes per time bin), and that there are differing values for each of the 18 sessions that exist. This shows the frequency of pulse rate that exists for each of the mice in the sessions we observed in the data set. We see differing distributions when looking at these histograms, that allow us to want to build a model that compares and contrasts the distributions of the observed data 
+
+
+```{r, echo = FALSE}
+for (i in 1:18) {
+
+  session_data <- session[[i]]$spks
+  
+  pulse_rates <- lapply(session_data, function(trial) colSums(trial)/ncol(trial))
+
+  pulse_rates <- unlist(pulse_rates)
+  
+  p <- ggplot(data.frame(PulseRate = pulse_rates), aes(x = PulseRate)) +
+    geom_density( color = "black", fill = "darkseagreen") +
+    labs(x = "Pulse Rate (spikes per time bin)", y = "Density", 
+         title = paste("Session", i))
+  
+  # Print the plot
+  print(p)
+}
+
+```
+
+We start off by comparing the density curve of each of the 18 sessions, by making this graph, plotting density by pulse rate (spikes per time bin), we can see the correlation that might exist between all 18 sessions, and see what similarities and differences exist. We start off by just analyzing this through each of the sessions individually, to get a feel for what trends appear in each distinguished trial. By analyzing this relationship between the pulse rate, you can get a sense of how active the neurons are during different trials and under different conditions. This might give you insights into how neural activity changes in response to different stimuli, tasks, or states of the different mice.
+
+```{r, echo = FALSE}
+
+all_data <- data.frame()
+
+
+for (i in 1:18) {
+ 
+session_data <- session[[i]]$spks
+ pulse_rates <- lapply(session_data, function(trial) colSums(trial)/ncol(trial))
+
+  pulse_rates <- unlist(pulse_rates)
+  pulse_rates <- data.frame(PulseRate = pulse_rates, Session = rep(i, length(pulse_rates)))
+  
+  all_data <- rbind(all_data, pulse_rates)
+}
+
+# Create overlaid density plot
+p <- ggplot(all_data, aes(x = PulseRate, color = as.factor(Session))) +
+  geom_density() +
+  labs(x = "Pulse Rate (spikes per time bin)", y = "Density", 
+       title = "Density Curves for all Sessions", 
+       color = "Session Number")
+
+# labels
+for (i in 1:18) {
+  df <- subset(all_data, Session == i)
+  dens <- density(df$PulseRate)
+  max_density_x <- dens$x[which.max(dens$y)]
+  max_density_y <- max(dens$y)
+  p <- p + annotate("text", x = max_density_x, y = max_density_y, label = paste( i))
+}
+
+# Print
+print(p)
+
+```
+
+We then take each of the the different density curves, and relay them on top of one another on the same plane, in order to fully understand the differences that exist in each of the individual sessions. We do this after analyzing them independently to fully understand what the differences in each sessions signify and what an average relationship is between some of the sessions that have similar density curves.
+
+```{r, echo = FALSE}
+all_data <- data.frame()
+
+for (i in 1:18) {
+  session_data <- session[[i]]
+  pulse_rates <- lapply(session_data$spks, function(trial) colSums(trial)/ncol(trial))
+  pulse_rates <- unlist(pulse_rates)
+ 
+  feedback_types <- session_data$feedback_type
+  
+  session_df <- data.frame(Session = rep(i, length(pulse_rates)), FeedbackType = feedback_types, PulseRate = pulse_rates)
+  
+  all_data <- rbind(all_data, session_df)
+}
+
+# Create violin plot for each session
+for (i in 1:18) {
+  df <- subset(all_data, Session == i)
+  
+  p <- ggplot(df, aes(x = as.factor(FeedbackType), y = PulseRate, fill = as.factor(FeedbackType))) +
+    geom_violin() +
+    labs(x = "Feedback Type", y = "Pulse Rate per Time Bin", title = paste("Violin Plot of Pulse Rate by Feedback Type for Session", i)) +
+    scale_fill_discrete(name = "Feedback Type", labels = c("-1", "1"))
+  
+  # Print the plot
+  print(p)
+}
+
+
+
+```
+Making this violin chart allows us to see any direct comparison between our main focus of this project, which is pulse rate, and the type of feedback we see in each of the session. Looking through each session. I notice however, that many of the violin charts end up having the same shape for both feedback values. This indicates that there may not be much of a correlation between pulse rate and the feedback type when conducting the experiment on the mice. This is an interesting discovery, however I do still see the importance of including it in our final predictive model. As each session seems to have very similar shaped violin charts, but there are a lot variations between the shapes that exist between the sessions. For instance, the shape of the violin chart in session 6 and 11 differ greatly from one another, but do not differ in terms of the shape within the session itself. This signifies that the similar pulse rate ends up yielding the same feedback type through all sessions.
+
+
+```{r, echo = FALSE}
+# Initialize
+all_data <- data.frame()
+
+for (i in 1:18) {
+  
+  session_data <- session[[i]]
+  avg_spikes <- lapply(session_data$spks, function(trial) mean(colSums(trial)))
+  avg_spikes <- unlist(avg_spikes)
+
+  feedback_types <- session_data$feedback_type
+  
+  session_df <- data.frame(Session = rep(i, length(avg_spikes)), FeedbackType = feedback_types, AvgSpikes = avg_spikes)
+
+  all_data <- rbind(all_data, session_df)
+}
+
+# Create violin plot for each session
+for (i in 1:18) {
+  df <- subset(all_data, Session == i)
+  
+  p <- ggplot(df, aes(x = as.factor(FeedbackType), y = AvgSpikes, fill = as.factor(FeedbackType))) +
+    geom_violin() +
+    labs(x = "Feedback Type", y = "Average Spikes per Trial", title = paste("Violin Plot of Average Spikes by Feedback Type for Session", i)) +
+    scale_fill_discrete(name = "Feedback Type", labels = c("-1", "1"))
+  
+  # Print the plot
+  print(p)
+}
+
+```
+In this visualization, I created a similar violin plot as our previous visualization, but in this iteration, im comparing the relationship between feedback type (values -1 and 1) and the average spikes per trial in each session. The different shapes of the violin plot signify allows us to come to several conclusions about this relationship. We can see that the two violin plots seem to be oppositely correlated in each of the sessions. In essence, if we dissect session 8, we can see that feedback type that outputs -1 is highly correlated with a lower average spike per trial, seeming to peak between 35-40 spikes. On the other hand, feedback type that outputs a value of 1 seems to have a much higher average spikes per trial number, peaking in the 60's. This is strong evidence that average spikes per trial and feedback type have a strong correlation and follow a specific pattern that can be traced through several
+
+```{r, echo = FALSE}
+
+density_data <- data.frame()
+
+
+for (i in 1:18) {
+
+  session_data <- session[[i]]$spks
+  
+  # Calculate pulse rates (spikes per time bin) for each trial
+  pulse_rates <- lapply(session_data, function(trial) colSums(trial)/ncol(trial))
+  pulse_rates <- unlist(pulse_rates)
+  
+  # Append the data
+  density_data <- rbind(density_data, 
+                        data.frame(Mouse = session[[i]]$mouse_name,
+                                   PulseRate = pulse_rates))
+}
+
+# Now create a density plot
+ggplot(density_data, aes(x = PulseRate, fill = as.factor(Mouse))) +
+  geom_density(alpha = 0.4) +
+  labs(x = "Pulse Rate (spikes per time bin)", 
+       y = "Density", 
+       fill = "Mouse") +
+  theme_minimal() +
+  guides(fill = guide_legend(override.aes = list(alpha = 1)))
+```
+
+
+When comparing the density curves for pulse rate (spikes per time bin) across different mice, we're essentially examining the overall neural activity patterns across the different subjects.
+
+Analyzing the pulse rate densities across the mice reveals variations in their neuronal firing patterns. Each mouse exhibits unique responses due to physiological and genetic factors. Looking at the graph, we observe some differences among the mice. For instance, Lederberg shows a higher number of spikes per time bin compared to the other mice. Additionally, Cori has a higher density of spikes occurring at the x-axis value of 1, indicating a higher likelihood of experiencing 1 spike per time bin. It's worth noting that the density charts exhibit similar patterns across the different mice, indicating some consistency in their responses.
+
+
+```{r, echo = FALSE}
+all_data <- data.frame()
+
+for (i in 1:18) {
+  # Exclude sessions 13, 8, 17, 16, 6, 14, and 15
+  if (i %in% c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)) {
+    next
+  }
+  
+  session_data <- session[[i]]$spks
+  
+  pulse_rates <- lapply(session_data, function(trial) colSums(trial)/ncol(trial))
+  
+  # Convert list to vector
+  pulse_rates <- unlist(pulse_rates)
+  
+  # Convert pulse rates to a data frame and add session number
+  pulse_rates <- data.frame(PulseRate = pulse_rates, Session = rep(i, length(pulse_rates)))
+  
+  # Add to the overall data frame
+  all_data <- rbind(all_data, pulse_rates)
+}
+
+# Create overlaid density plot
+p <- ggplot(all_data, aes(x = PulseRate, color = as.factor(Session))) +
+  geom_density() +
+  labs(x = "Pulse Rate (spikes per time bin)", y = "Density", 
+       title = "Density Curves for all Sessions (excluding 13, 8, 17, 16, 6, 14, 15, 11, 7, 4)", 
+       color = "Session Number")
+
+# Calculate maximum density points and add labels
+for (i in 1:18) {
+  # Exclude sessions 13, 8, 17, 16, 6, 14, and 15
+  if (i %in% c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)) {
+    next
+  }
+  
+  df <- subset(all_data, Session == i)
+  dens <- density(df$PulseRate)
+  max_density_x <- dens$x[which.max(dens$y)]
+  max_density_y <- max(dens$y)
+  p <- p + annotate("text", x = max_density_x, y = max_density_y, label = paste(i))
+}
+
+# Print the plot
+print(p)
+
+```
+
+
+# After these first visualizations, we want to go ahead and start to break down what sessions we want to use in our predictive model to come toward the end of our exploration. After removing plots that seem like outliers, we are left with a few sessions we want to breakdown, by trial and mousename. We start by removing sessions: 13, 8, 17, 16, 6, 14, 15, 11, 7, 4
+
+### Density of Average Spikes for All Trials Across All Sessions
+```{r, echo = FALSE}
+# Create an empty dataframe to store the results
+avg_spikes_df <- tibble(session = integer(), trial = integer(), avg_spikes = numeric())
+
+# Loop over all sessions
+for(session_number in 1:18) {
+  # Loop over all trials in the chosen session
+  for(i in 1:length(session[[session_number]]$spks)) {
+    # Get the specific trial data from the chosen session
+    trial_data <- session[[session_number]]$spks[[i]]
+    
+    # Summarize the data to get the total activity for each neuron
+    neural_activity <- colSums(trial_data)
+    
+    # Calculate the average spike rate for each neuron
+    avg_spikes <- neural_activity / ncol(trial_data)
+    
+    # Add the average spike rates to the dataframe
+    avg_spikes_df <- avg_spikes_df %>% 
+      add_row(
+        session = rep(session_number, length(avg_spikes)),
+        trial = rep(i, length(avg_spikes)),
+        avg_spikes = avg_spikes
+      )
+  }
+}
+
+# Create the plot
+ggplot(avg_spikes_df, aes(x = avg_spikes)) + 
+  geom_density(fill = "blue") +
+  facet_wrap(~session, scales = "free") +
+  xlab("Average Spikes") +
+  ylab("Density") +
+  theme_minimal() +
+  ggtitle("Density of Average Spikes for All Trials Across All Sessions")
+
+```
+
+```{r, echo = FALSE}
+# Choose a session and trial numbers
+session_number <- 5
+selected_trials <- c(1, 10, 20, 30, 50, 75, 84, 100, 102, 112)
+
+# Create an empty dataframe to store the results
+avg_spikes_df <- tibble(trial = integer(), avg_spikes = numeric())
+
+# Loop over all selected trials in the chosen session
+for(i in selected_trials){
+  # Get the specific trial data from the chosen session
+  trial_data <- session[[session_number]]$spks[[i]]
+  
+  # Summarize the data to get the total activity for each neuron
+  neural_activity <- colSums(trial_data)
+  
+  # Calculate the average spike rate for each neuron
+  avg_spikes <- neural_activity / ncol(trial_data)
+  
+  # Add the average spike rates to the dataframe
+  avg_spikes_df <- avg_spikes_df %>% 
+    add_row(
+      trial = rep(i, length(avg_spikes)),
+      avg_spikes = avg_spikes
+    )
+}
+
+# Create the plot
+ggplot(avg_spikes_df, aes(x = avg_spikes)) + 
+  geom_density(fill = "blue") +
+  facet_wrap(~trial) +
+  xlab("Average Spikes") +
+  ylab("Density") +
+  theme_minimal() +
+  ggtitle(paste("Density of Average Spikes for Selected Trials in Session", session_number))
+
+```
+
+We want to see if there are any trends between the trials of a specific session, looking at whether or not the number of trials within a session seem to have any relationship with the number average spikes in the session holistically. Looking at the following Density of Average Spikes density graphs from randomly generated trials within the session, I can conclude that there is no concrete relationship between each. Looking at the example more complexly, we can see similarities between the first trial, and the 112th trial. This removes any potential questions about how trial number and average spikes per trial have any correlation.
+
+
+
+
+
+```{r, echo = FALSE}
+# Empty vectors to store the feedback counts
+negative_feedback_counts <- vector("integer", length = 18)
+positive_feedback_counts <- vector("integer", length = 18)
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Select session data
+  session_data <- session[[i]]
+  
+  # Count the number of negative feedback types
+  negative_feedback_counts[i] <- sum(session_data$feedback_type == -1)
+  
+  # Count the number of positive feedback types
+  positive_feedback_counts[i] <- sum(session_data$feedback_type == 1)
+}
+
+# Print the feedback counts for each session
+for (i in 1:18) {
+  cat("Session", i, "- Negative Feedback:", negative_feedback_counts[i], "- Positive Feedback:", positive_feedback_counts[i], "\n")
+}
+
+```
+In this chart, we take a look at feedback from each of the 18 trials, looking for any patterns in a way thats a bit different than a visual aid. In order to fully understand this chart, lets remove the outlier sessions. and look at the different negative/positive feedbacks. This chart is useful as it puts our data into an easily digestable numeric chart, that might help those who are confused by what is being conveyed in our density curves.
+
+```{r, echo = FALSE}
+# Empty vectors to store the feedback counts
+negative_feedback_counts <- vector("integer", length = 18)
+positive_feedback_counts <- vector("integer", length = 18)
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Exclude sessions 13, 8, 17, 16, 6, 14, and 15
+  if (i %in% c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)) {
+    next
+  }
+
+  session_data <- session[[i]]
+  
+  negative_feedback_counts[i] <- sum(session_data$feedback_type == -1)
+  
+  # Count the number of positive feedback types
+  positive_feedback_counts[i] <- sum(session_data$feedback_type == 1)
+}
+
+# Print the feedback counts for each session
+for (i in 1:18) {
+  # Exclude sessions 13, 8, 17, 16, 6, 14, and 15
+  if (i %in% c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)) {
+    next
+  }
+  
+  cat("Session", i, "- Negative Feedback:", negative_feedback_counts[i], "- Positive Feedback:", positive_feedback_counts[i], "\n")
+}
+
+```
+
+
+
+
+
+Neuron count
+```{r, echo = FALSE}
+# Empty vectors to store neuron counts and average spike counts per session
+neuron_count <- c()
+average_spikes <- c()
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Select session data
+  session_data <- session[[i]]$spks
+  
+  # Get the number of neurons in the session
+  neuron_count[i] <- nrow(session_data[[1]])  # Assuming all trials have the same number of neurons
+  
+  # Calculate average spike count per neuron for the session
+  spikes_per_neuron <- sapply(session_data, sum)  # Calculate total spikes per neuron for each trial
+  average_spikes[i] <- mean(spikes_per_neuron)  # Calculate the average spikes per neuron
+  
+  # Print the information for the session
+  cat("Session", i, "- Number of Neurons:", neuron_count[i], "- Average Spikes per Neuron:", average_spikes[i], "\n")
+}
+
+```
+This data shows how active neurons are in different sessions. Each session records how many neurons there are and how often they "spike" or send signals. More neurons doesn't always mean more spikes. For example, Session 4 had lots of neurons but not the most spikes per neuron. In Session 13, there were fewer neurons, but they spiked more often. This suggests that other factors, like what the mice are doing or differences between the mice, can affect neuron activity.
+
+
+
+```{r, echo = FALSE}
+# Initialize an empty data frame to store all sessions' data
+all_data <- data.frame()
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Select session data
+  session_data <- session[[i]]$spks
+  
+  # Calculate average spike count per neuron for each trial
+  avg_spikes_per_trial <- sapply(session_data, function(trial) sum(trial)/nrow(trial))
+  
+  # Combine session number and average spikes per trial into a data frame
+  session_df <- data.frame(Session = rep(i, length(avg_spikes_per_trial)), AverageSpikes = avg_spikes_per_trial)
+  
+  # Add to the overall data frame
+  all_data <- rbind(all_data, session_df)
+}
+
+# Create a density plot for each session
+for (i in 1:18) {
+  # Filter data for the current session
+  df <- subset(all_data, Session == i)
+  
+  p <- ggplot(df, aes(x = AverageSpikes)) +
+    geom_density(fill = "steelblue", alpha = 0.5) +
+    labs(x = "Average Spikes per Neuron", y = "Density", title = paste("Density Plot for Session", i))
+  
+  # Print the plot
+  print(p)
+}
+
+```
+
+In this exploration, we also want to check to see how the average spikes per neuron to see how frequently they occur. We start by comparing the average spike rate per neuron of each session individually, as we did earlier for the Pulse Rate per time bin. Filtering through each session, we find few sessions that carry a specific trend, however there are a few that seem like outliers. We will discover which sessions these are when we overlay each of the density curves over one another.
+
+
+```{r, echo = FALSE}
+# Initialize an empty ggplot
+p <- ggplot()
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Filter data for the current session
+  df <- subset(all_data, Session == i)
+  
+  # Add a density layer to the plot for the current session
+  p <- p + geom_density(data = df, aes(x = AverageSpikes, fill = as.factor(Session)), alpha = 0.5)
+  
+  # Calculate maximum density point and add label
+  dens <- density(df$AverageSpikes)
+  max_density_x <- dens$x[which.max(dens$y)]
+  max_density_y <- max(dens$y)
+  p <- p + annotate("text", x = max_density_x, y = max_density_y, label = paste(i), color = "black", parse = TRUE)
+}
+
+# Customize the plot
+p <- p + labs(x = "Average Spikes per Neuron", y = "Density", 
+               title = "Density Plots for All Sessions Overlayed", 
+               fill = "Session") +
+       scale_fill_discrete(name = "Session Number")
+
+# Print the plot
+print(p)
+
+
+
+```
+When we overlay the 18 density curves over one another, it becomes evident that a majority of the graphs can be found with a density at or just below 2, and an average spike per neuron rate between 0.8 and 1.2. Using this information, we can see which sessions seem to be outliers, like curve #6, 12, 3, 9, etc. These are all curves that seem like exaggerated outliers in comparison to the rest of our data. We will use this information, as well as previous findings to integrate our data set in preparation for our prediction model.
+
+```{r, echo = FALSE}
+# Empty vectors to store neuron counts and average spike counts per session
+neuron_count <- c()
+average_spikes <- c()
+
+# Loop over all sessions
+for (i in 1:18) {
+  # Exclude sessions 13, 8, 17, 16, 6, 14, 15, 11, 7, and 4
+  if (i %in% c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)) {
+    next
+  }
+  
+  # Select session data
+  session_data <- session[[i]]$spks
+  
+  # Get the number of neurons in the session
+  neuron_count[i] <- nrow(session_data[[1]])  # Assuming all trials have the same number of neurons
+  
+  # Calculate average spike count per neuron for the session
+  spikes_per_neuron <- sapply(session_data, sum)  # Calculate total spikes per neuron for each trial
+  average_spikes[i] <- mean(spikes_per_neuron)  # Calculate the average spikes per neuron
+  
+  # Print the information for the session
+  cat("Session", i, "- Number of Neurons:", neuron_count[i], "- Average Spikes per Neuron:", average_spikes[i], "\n")
+}
+
+```
+
+
+
+
+### PART 2
+COMBINING THE DATA
+ 
+
+```{r, echo = FALSE}
+# List of sessions to exclude
+sessions_to_exclude <- c(13, 8, 17, 16, 6, 14, 15, 11, 7, 4)
+
+session_summary <- list()
+
+# Loop only over sessions not in the exclude list
+for (i in setdiff(1:18, sessions_to_exclude)) {
+  # Loop over each trial in the current session
+  for (j in 1:length(session[[i]]$feedback_type)) {
+    # Compute summary statistics for the current trial
+    spks_values <- c(session[[i]]$spks[[j]])
+    avg_spikes_per_trial <- mean(spks_values)
+    # Calculate pulse rate (average spikes per time bin)
+    pulse_rate <- avg_spikes_per_trial / ncol(session[[i]]$spks[[j]])
+    pulse_rate_vs_density <- pulse_rate / density(spks_values)$x[which.max(density(spks_values)$y)]
+    avg_spikes_per_trial_vs_density <- avg_spikes_per_trial / density(spks_values)$x[which.max(density(spks_values)$y)]
+
+    session_summary[[length(session_summary) + 1]] <- data.frame(
+      session_number = i,
+      feedback_type = session[[i]]$feedback_type[j],
+      contrast_left = session[[i]]$contrast_left[j],
+      contrast_right = session[[i]]$contrast_right[j],
+      pulse_rate = pulse_rate,
+      avg_spikes_per_trial = avg_spikes_per_trial,
+      pulse_rate_vs_density = pulse_rate_vs_density,
+      avg_spikes_per_trial_vs_density = avg_spikes_per_trial_vs_density
+    )
+  }
+}
+
+session_all_df <- do.call(rbind, session_summary)
+
+
+
+```
+
+In this step of data integration, we are aggregating and summarizing trial-based data from multiple experimental sessions into a unified and structured dataset. The purpose of this is to simplify the raw data and extract useful summary statistics for each trial, which can then be used in subsequent analyses or models. We are adding average spikes per neuron, average spikes per trial, average spikes per feedback, pulse rate vs density, average spikes per neruon vs density, and average spikes per trial vs density. We also want to take into account the removal of the sessions that we saw to be outliers.
+
+
+```{r, echo = FALSE}
+head(session_all_df)
+tail(session_all_df)
+```
+These charts represent the first and last 6 rows of the new integretated dataset.
+
+
+
+
+# Part 3: Predictive Modeling
+
+After gathering all of the information from the exploratory analysis and combining the factors we found to be important and influential from our dataset. We want to make a prediction model that takes into account our new integrated dataset, that has the capability to predict what will happen when we append our test data, to see if our predictions that Average Spikes per Neuron and Pulse Rate per Time Bin have a lasting effect on the neural activity of the mice in our experiment. We want to create a prediction model that has the most accurate reading possible, so in the first half of this section, we will test to see the misclassification error rate present in several different prediction modeling methods. Starting with, Logistic Regression, Linear Discriminant Analysis, and K-nearest Neighbors. Once we find the resulting misclassification error rates, we will make our prediction model that will be further tested with the test data added to our current data set. 
+
+### Logistic Regression Model.
+```{r}
+
+session_all_df$feedback_type <- ifelse(session_all_df$feedback_type == -1, 0, 1)
+
+# Fit the logistic regression model
+model <- glm(feedback_type ~ ., data = session_all_df, family = "binomial")
+
+# Make predictions
+predictions <- predict(model, newdata = session_all_df, type = "response")
+
+binary_predictions <- ifelse(predictions >= 0.5, 1, 0)
+
+# Calculate the misclassification error rate
+misclassification_rate <- mean(binary_predictions != session_all_df$feedback_type)
+
+# Print the misclassification 
+print(paste("Misclassification Error Rate:", misclassification_rate))
+
+```
+
+We start with a Logistic Regression Model,which is used to predict binary outcomes. It analyzes the relationship between a set of independent variables and the probability of a binary outcome like success andfailure.  These predicted probabilities can then be used to make predictions and classify new data into one of the binary outcomes.When we run our Logistic Regression Model, we get a misclassification error rate of 0.3177, which translates to just a 68.23% chance of correctly making the predictions for our intergrated data set. This is a relatively high misclassification error rate, which leads me to believe we will get more favorable results from the other prediction models.
+
+### LDA
+```{r, echo = FALSE}
+library(MASS)
+lda_model <- lda(feedback_type ~ pulse_rate + avg_spikes_per_trial + pulse_rate_vs_density + avg_spikes_per_trial_vs_density, data = session_all_df)
+predictions <- predict(lda_model, newdata = session_all_df)
+predicted_labels <- predictions$class
+misclassification_rate <- mean(predicted_labels != session_all_df$feedback_type)
+cat("Misclassification Error Rate (LDA):", misclassification_rate, "\n")
+
+
+```
+A linear discriminant analysis (LDA) prediction model is used to find a linear combination of variables that can best be used to seperate items into different groups. It is an incredibly powerful statistical tool for prediction modeling, however in our case, we get a 0.3231 misclassication error rate, which translates over to a 67.69% chance of correctly predicting the feedback type of the integrated dataset. Again, I believe we will yield a lower misclassification error rate with our next prediction model.
+
+### KNN
+```{r, echo = FALSE}
+
+library(class)
+
+training_features <- session_all_df[,c("pulse_rate", "avg_spikes_per_trial", "pulse_rate_vs_density", "avg_spikes_per_trial_vs_density")]
+training_labels <- session_all_df$feedback_type
+knn_predictions <- knn(train = training_features, test = training_features, cl = training_labels, k = 3)
+misclassification_rate <- mean(knn_predictions != training_labels)
+
+cat("Misclassification Error Rate (KNN):", misclassification_rate, "\n")
+summary(knn_predictions)
+```
+After performing both the KNN, Logistical Regression, and Linear Discriminant Analysis predictions, the prediction model that gave us the best percentages of instances in which the data was predicted correctly was our KNN prediction model, that stated that there is a 78.49% chance that the predictions are accurate on the integrated data we created in the previous part of our exploration. This is far more accurate of a prediction than the other prediction models, and I will be incorporating this method into testing out test data.
+
+# Part 4. Predictive Modeling based on the test data:
+
+We start by calling the test files and opening the files, parsing through each one and unzipping the data within.
+```{r, echo = FALSE}
+setwd("/Users/amiryaacoobi/Desktop/testdata")
+test = list()
+
+for(i in 1:2) {
+  test[[i]] = readRDS(paste("/Users/amiryaacoobi/Desktop/testdata/test", i, ".rds", sep = ""))
+  print(test[[i]]$mouse_name)
+  print(test[[i]]$date_exp)
+}
+
+```
+In this code, we call our newly acquired test data and incorporate it into our predictive model, to see just how accurate our reading was on the first 18 sessions. Doing this will let us see how accurate our prediction holds up when being introduced to new data. We also want to make sure that our prediction is robust, and is not just a product of the changes we made during our data integration steps.
+
+
+```{r, echo = FALSE}
+
+test_summary <- list()
+
+
+test_length <- length(test)
+
+for (i in 1:test_length) {
+  # Loop over each trial 
+  for (j in 1:length(test[[i]]$feedback_type)) {
+    # summary statistic.
+    spks_values <- c(test[[i]]$spks[[j]])
+
+    #avg spike
+    avg_spikes_per_trial <- mean(spks_values)
+
+    # Calculate pulse rate 
+    pulse_rate <- avg_spikes_per_trial / ncol(test[[i]]$spks[[j]])
+    pulse_rate_vs_density <- pulse_rate / density(spks_values)$x[which.max(density(spks_values)$y)]
+    avg_spikes_per_trial_vs_density <- avg_spikes_per_trial / density(spks_values)$x[which.max(density(spks_values)$y)]
+
+    # Append
+    test_summary[[length(test_summary) + 1]] <- data.frame(
+      session_number = i,
+      feedback_type = test[[i]]$feedback_type[j],
+      contrast_left = test[[i]]$contrast_left[j],
+      contrast_right = test[[i]]$contrast_right[j],
+      pulse_rate = pulse_rate,
+      avg_spikes_per_trial = avg_spikes_per_trial,
+      pulse_rate_vs_density = pulse_rate_vs_density,
+      avg_spikes_per_trial_vs_density = avg_spikes_per_trial_vs_density
+    )
+  }
+}
+
+# Combine all trial data into a single data frame
+test_all_df <- do.call(rbind, test_summary)
+
+head(test_all_df)
+
+
+```
+We pre-process the test data and integrate it with the same variables prepare to run our data through the same KNN prediction model.
+```{r, echo = FALSE}
+
+library(class)
+
+training_features <- test_all_df[,c("pulse_rate", "avg_spikes_per_trial", "pulse_rate_vs_density", "avg_spikes_per_trial_vs_density", "contrast_left", "contrast_right")]
+training_labels <- test_all_df$feedback_type
+knn_predictions <- knn(train = training_features, test = training_features, cl = training_labels, k = 3)
+misclassification_rate <- mean(knn_predictions != training_labels)
+
+cat("Misclassification Error Rate (KNN):", misclassification_rate, "\n")
+
+```
+
+
+After running our newly acquired test data and integrating it with the previously integrated dataset, which includes aspects of our exploratory visualizations and analysis, we want to ensure that our prediction model is robust when introduced to new data. After running the data through the KNN prediction model, we get a Misclassification Error Rate of 0.21, which is even more robust than our original findings with our integrated data from the original 18 sessions. This shows that our variables that we explored in our original findings in part 2: pulse_rate", "avg_spikes_per_trial", "pulse_rate_vs_density", "avg_spikes_per_trial_vs_density", "contrast_left", "contrast_right, strongly encourage a successful feedback response of 1 rather than -1. Manipulating the data in our data integration aspect of the project allowed for us to pick and choose what connections to make between a successful feedback type and the neural responses of the mice in our sessions. 
+
+
+# Section 5 Discussion.
+
+In this project, we analyzed data from an experiment involving mice and visual stimuli trials. Our goal was to build a prediction model for trial outcomes using features derived from the neural activity data.
+
+We focused on a few key components of our dataset: pulse_rate, which represents average neuron spikes per time bin; avg_spikes_per_trial, the average spikes in a trial; pulse_rate_vs_density, the normalized pulse rate relative to spike density; and avg_spikes_per_trial_vs_density, the normalized average spikes per trial relative to spike density.
+
+By incorporating these features into our predictive model, we achieved a higher success rate in classifying trial outcomes. These features captured important aspects of neuronal activity that influenced the feedback type. We can say that mice who had higher pulse rates, higher spikes per trial, and had a normal relationship betwen pulse rate and density were more likely to receive successful feedback than mice who did not undergo these situations.
+
+In summary, by considering pulse_rate, avg_spikes_per_trial, pulse_rate_vs_density, and avg_spikes_per_trial_vs_density, we improved the accuracy of our prediction model. This highlighs the imporatnce between neuronal activity and trial outcomes, providing insights into the underlying mechanisms of the brain's response to visual stimuli.
+
+
+
